@@ -1,63 +1,93 @@
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { calculateTransitionPlan } from "./domain/fleet";
+import { ComparisonPanel } from "./components/ComparisonPanel";
+import { FleetPlanner } from "./components/FleetPlanner";
+import { OverviewPanel } from "./components/OverviewPanel";
+import { VehicleInspector } from "./components/VehicleInspector";
 import { usePlannerStore } from "./store/plannerStore";
-import { AssumptionsPanel } from "./components/AssumptionsPanel";
-import { VehicleList } from "./components/VehicleList";
-import { DepotScene } from "./components/DepotScene";
-import { Timeline } from "./components/Timeline";
-import { KpiCards } from "./components/KpiCards";
-import { CostChart } from "./components/CostChart";
+
+const LazyDepotScene = lazy(() => import("./components/DepotScene").then((module) => ({ default: module.DepotScene })));
+
+type WorkspaceTab = "overview" | "fleet" | "compare";
+const tabs: Array<{ id: WorkspaceTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "fleet", label: "Fleet Planner" },
+  { id: "compare", label: "Compare Plans" },
+];
 
 export default function App() {
-  const scenario = usePlannerStore((state) => state.scenario);
+  const workspace = usePlannerStore((state) => state.workspace);
+  const activePlanId = usePlannerStore((state) => state.activePlanId);
   const selectedYear = usePlannerStore((state) => state.selectedYear);
-
-  const result = useMemo(() => calculateTransitionPlan(scenario), [scenario]);
-
-  const yearResult =
-    result.years.find((item) => item.year === selectedYear) ?? result.years[0];
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
+  const activePlan = workspace.plans[activePlanId];
+  const result = useMemo(
+    () => calculateTransitionPlan(activePlan, workspace.assumptions),
+    [activePlan, workspace.assumptions],
+  );
+  const yearResult = result.years.find((item) => item.year === selectedYear) ?? result.years[0];
 
   return (
-    <main className="min-h-screen w-full bg-[#0a0f1d] text-slate-100">
-      <header className="border-b border-slate-800/80 bg-[#0f172a]/95 shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-        <div className="mx-auto w-full max-w-[1600px] px-3 py-4 sm:px-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.25em] text-sky-400">
-            Digital Twin
-          </div>
-          <h1 className="break-words text-xl font-bold tracking-tight text-slate-50 sm:text-2xl">
-            Fleet Transition Planner
-          </h1>
+    <main className="app-shell">
+      <a className="skip-link" href="#workspace-content">Skip to planning workspace</a>
+      <header className="app-header">
+        <div className="brand-lockup">
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m4 7 8-4 8 4-8 4-8-4Z" /><path d="m4 12 8 4 8-4M4 17l8 4 8-4" /></svg>
+          </span>
+          <div><p>Digital twin decision platform</p><h1>Fleet Transition Planner</h1></div>
+        </div>
+        <div className="header-status" aria-label="Current workspace state">
+          <span>{activePlan.name}</span><strong>{selectedYear}</strong>
+          <i className={yearResult.exceedsSiteCapacity ? "status-dot is-danger" : "status-dot"} aria-hidden="true" />
+          <span>{yearResult.exceedsSiteCapacity ? "Capacity exceeded" : "Grid normal"}</span>
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-[1600px] min-w-0 gap-4 p-3 sm:gap-5 sm:p-5 xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]">
-        <aside className="grid min-w-0 gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-1">
-          <AssumptionsPanel />
-          <VehicleList />
-        </aside>
+      <div className="split-workspace">
+        <section className="depot-pane" aria-label="Persistent depot preview">
+          <Suspense fallback={<div className="scene-placeholder" role="status"><span />Loading 3D depot…</div>}>
+            <LazyDepotScene yearResult={yearResult} />
+          </Suspense>
+          <VehicleInspector />
+        </section>
 
-        <section className="min-w-0 space-y-4 sm:space-y-5">
-          <KpiCards yearResult={yearResult} result={result} />
-
-          {yearResult.exceedsSiteCapacity && (
-            <div className="flex min-w-0 items-start gap-3 rounded-xl border border-red-500/70 bg-red-500/10 px-3 py-3 text-sm text-red-100 shadow-[0_0_24px_rgba(239,68,68,0.14)] sm:px-4">
-              <svg className="mt-0.5 h-5 w-5 shrink-0 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M12 3 2.5 20h19L12 3Z" />
-                <path d="M12 9v5M12 17.5v.5" />
-              </svg>
-              <span>
-                Site power capacity exceeded in {selectedYear}. The plan requires{" "}
-                {Math.round(yearResult.peakPowerKW)} kW, above the configured{" "}
-                {scenario.assumptions.sitePowerCapacityKW} kW ceiling.
-              </span>
-            </div>
-          )}
-
-          <DepotScene yearResult={yearResult} />
-          <Timeline />
-          <CostChart result={result} />
+        <section className="workspace-pane" id="workspace-content">
+          <nav className="workspace-tabs" role="tablist" aria-label="Planning workspace">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                id={`tab-${tab.id}`}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-controls={`panel-${tab.id}`}
+                className={activeTab === tab.id ? "is-active" : ""}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <TabIcon tab={tab.id} />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div
+            className="workspace-content"
+            id={`panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`tab-${activeTab}`}
+          >
+            {activeTab === "overview" && <OverviewPanel result={result} yearResult={yearResult} />}
+            {activeTab === "fleet" && <FleetPlanner />}
+            {activeTab === "compare" && <ComparisonPanel />}
+          </div>
         </section>
       </div>
     </main>
   );
+}
+
+function TabIcon({ tab }: { tab: WorkspaceTab }) {
+  if (tab === "overview") return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 13h6V4H4v9ZM14 20h6v-9h-6v9ZM4 20h6v-3H4v3ZM14 7h6V4h-6v3Z" /></svg>;
+  if (tab === "fleet") return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 15V8h12l4 4v3M5 15h14M7 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM17 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM15 8v4h4" /></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 4v16M19 4v16M5 8h6M13 16h6M8 5l3 3-3 3M16 13l-3 3 3 3" /></svg>;
 }

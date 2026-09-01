@@ -1,42 +1,38 @@
 import type { TransitionPlanResult, YearResult } from "../domain/fleet";
+import { compactMoney, formatTonnes } from "../utils/format";
 
-function money(value: number): string {
-  return new Intl.NumberFormat("en-SG", {
-    style: "currency",
-    currency: "SGD",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function Card({ title, value, warning = false, highlight = false }: {
+function Card({ title, value, tone = "neutral", detail }: {
   title: string;
   value: string;
-  warning?: boolean;
-  highlight?: boolean;
+  tone?: "neutral" | "positive" | "warning";
+  detail?: string;
 }) {
   return (
-    <div className={[
-      "min-w-0 rounded-2xl border p-3 shadow-[0_12px_30px_rgba(0,0,0,0.16)] backdrop-blur-lg sm:p-4",
-      warning
-        ? "border-red-500/60 bg-red-500/10"
-        : "border-slate-700/70 bg-slate-800/55",
-    ].join(" ")}>
-      <div className="break-words text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">{title}</div>
-      <div className={`mt-1 break-words text-lg font-bold sm:text-xl ${highlight ? "text-emerald-400" : "text-slate-50"}`}>
-        {value}
-      </div>
-    </div>
+    <article className={`kpi-card tone-${tone}`}>
+      <p>{title}</p>
+      <strong>{value}</strong>
+      {detail && <span>{detail}</span>}
+    </article>
   );
 }
 
-export function KpiCards({ yearResult, result }: { yearResult: YearResult; result: TransitionPlanResult }) {
+export function KpiCards({ yearResult, result }: {
+  yearResult: YearResult;
+  result: TransitionPlanResult;
+}) {
+  const totalVehicles = yearResult.electricVehicles + yearResult.dieselVehicles;
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-      <Card title="Annual cost" value={money(yearResult.annualTotalCost)} />
-      <Card title="Annual emissions" value={`${Math.round(yearResult.annualEmissionsKgCO2 / 1000)} t CO₂`} highlight />
-      <Card title="Electric fleet" value={`${yearResult.electricVehicles}/${yearResult.electricVehicles + yearResult.dieselVehicles}`} />
-      <Card title="Peak power" value={`${Math.round(yearResult.peakPowerKW)} kW`} warning={yearResult.exceedsSiteCapacity} />
-      <Card title="Payback" value={result.paybackYear ? String(result.paybackYear) : "Not reached"} />
+    <div className="kpi-grid" aria-label="Selected year key results">
+      <Card title="Annual total cost" value={compactMoney.format(yearResult.annualTotalCost)} />
+      <Card
+        title="Annual operating savings"
+        value={compactMoney.format(yearResult.annualSavingsVsBaseline)}
+        tone={yearResult.annualSavingsVsBaseline >= 0 ? "positive" : "warning"}
+        detail="versus all-diesel"
+      />
+      <Card title="Annual emissions" value={formatTonnes(yearResult.annualEmissionsKgCO2)} tone="positive" />
+      <Card title="Electric fleet" value={`${yearResult.electricVehicles} / ${totalVehicles}`} detail={`${Math.round((yearResult.electricVehicles / totalVehicles) * 100)}% electrified`} />
+      <Card title="Fleet payback" value={result.paybackYear ? String(result.paybackYear) : "Not reached"} />
     </div>
   );
 }

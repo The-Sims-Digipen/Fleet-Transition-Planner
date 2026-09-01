@@ -1,43 +1,93 @@
 import { describe, expect, it } from "vitest";
-import { calculateTransitionPlan } from "./calculateTransitionPlan.js";
-import type { Scenario } from "./types.js";
+import {
+  calculateTransitionPlan,
+  calculateVehicleEconomics,
+  optimizeTransitionPlan,
+  summarizePlan,
+} from "./calculateTransitionPlan.js";
+import type { Assumptions, TransitionPlan, Vehicle } from "./types.js";
 
-describe("calculateTransitionPlan", () => {
+const assumptions: Assumptions = {
+  dieselPricePerLitre: 3,
+  electricityPricePerKWh: 0.2,
+  dieselLitresPer100Km: 10,
+  electricKWhPer100Km: 20,
+  dieselKgCO2PerLitre: 2.68,
+  gridKgCO2PerKWh: 0.4,
+  electricVehiclePurchaseCost: 10000,
+  chargerCost: 1000,
+  chargerPowerKW: 22,
+  sitePowerCapacityKW: 44,
+  startYear: 2026,
+  endYear: 2030,
+};
+
+function vehicle(id: string, distance: number, transitionYear: number | null): Vehicle {
+  return {
+    id,
+    registration: id.toUpperCase(),
+    category: "Van",
+    annualDistanceKm: distance,
+    currentAgeYears: Number(id.at(-1)) || 1,
+    transitionYear,
+    parkingPosition: { x: 0, z: 0 },
+  };
+}
+
+function plan(vehicles: Vehicle[]): TransitionPlan {
+  return { id: "planA", name: "Plan A", vehicles };
+}
+
+describe("fleet transition calculations", () => {
   it("moves vehicles from diesel to electric in the assigned year", () => {
-    const scenario: Scenario = {
-      id: "test",
-      name: "Test",
-      assumptions: {
-        dieselPricePerLitre: 2.8,
-        electricityPricePerKWh: 0.3,
-        dieselLitresPer100Km: 9,
-        electricKWhPer100Km: 22,
-        dieselKgCO2PerLitre: 2.68,
-        gridKgCO2PerKWh: 0.4,
-        electricVehiclePurchaseCost: 60000,
-        chargerCost: 4000,
-        chargerPowerKW: 22,
-        sitePowerCapacityKW: 100,
-        startYear: 2026,
-        endYear: 2028
-      },
-      vehicles: [
-        {
-          id: "v1",
-          registration: "TEST-1",
-          category: "Van",
-          annualDistanceKm: 30000,
-          currentAgeYears: 5,
-          transitionYear: 2027,
-          parkingPosition: { x: 0, z: 0 }
-        }
-      ]
-    };
+    const result = calculateTransitionPlan(plan([vehicle("v1", 30000, 2027)]), assumptions);
+    expect(result.years.map((item) => item.electricVehicles)).toEqual([0, 1, 1, 1, 1]);
+    expect(result.years[1].annualElectricEnergyCost).toBeGreaterThan(0);
+    expect(result.emissionsAvoidedKgCO2).toBeGreaterThan(0);
+  });
 
-    const result = calculateTransitionPlan(scenario);
+  it("does not report payback when no transition occurs", () => {
+    const result = calculateTransitionPlan(plan([vehicle("v1", 30000, null)]), assumptions);
+    expect(result.paybackYear).toBeNull();
+    expect(result.totalCapitalCost).toBe(0);
+  });
 
-    expect(result.years[0].electricVehicles).toBe(0);
-    expect(result.years[1].electricVehicles).toBe(1);
-    expect(result.years[2].electricVehicles).toBe(1);
+  it("marks a vehicle non-viable when electricity costs more than diesel", () => {
+    const economics = calculateVehicleEconomics(vehicle("v1", 30000, null), {
+      ...assumptions,
+      dieselPricePerLitre: 0.5,
+      electricityPricePerKWh: 1,
+    });
+    expect(economics.annualSavings).toBeLessThan(0);
+    expect(economics.paybackYears).toBeNull();
+    expect(economics.paybackBand).toBe("not-viable");
+  });
+
+  it("produces a complete plan summary", () => {
+    const transitionPlan = plan([vehicle("v1", 50000, 2026)]);
+    const result = calculateTransitionPlan(transitionPlan, assumptions);
+    const summary = summarizePlan(transitionPlan, result);
+    expect(summary.planId).toBe("planA");
+    expect(summary.electricVehiclesAtEnd).toBe(1);
+    expect(summary.peakPowerKW).toBe(22);
+  });
+});
+
+describe("optimizeTransitionPlan", () => {
+  it("is deterministic, selects positive-value vehicles, and respects capacity", () => {
+    const input = plan([
+      vehicle("v1", 60000, null),
+      vehicle("v2", 50000, null),
+      vehicle("v3", 40000, null),
+      vehicle("v4", 1000, 2027),
+    ]);
+    const first = optimizeTransitionPlan(input, assumptions);
+    const second = optimizeTransitionPlan(input, assumptions);
+    expect(first.transitionedVehicleIds).toEqual(second.transitionedVehicleIds);
+    expect(first.transitionedVehicleIds).toEqual(["v1", "v2"]);
+    expect(first.plan.vehicles.filter((item) => item.transitionYear !== null)).toHaveLength(2);
+    const result = calculateTransitionPlan(first.plan, assumptions);
+    expect(result.peakPowerKW).toBeLessThanOrEqual(assumptions.sitePowerCapacityKW);
+    expect(result.overloadedYears).toEqual([]);
   });
 });
