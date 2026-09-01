@@ -95,10 +95,12 @@ function Depot() {
 
 export function DepotScene() {
   return (
-    <div className="h-[430px] overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
-      <Canvas shadows camera={{ position: [14, 12, 14], fov: 45 }}>
-        <Depot />
-      </Canvas>
-    </div>
+    <section className="min-w-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+      <div className="h-[clamp(18rem,52vw,32rem)] min-h-0 w-full min-w-0 touch-none">
+        <Canvas shadows camera={{ position: [14, 12, 14], fov: 45 }}>
+          <Depot />
+        </Canvas>
+      </div>
+    </section>
   );
 }

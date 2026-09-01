@@ -20,16 +20,18 @@ function Card({
   return (
     <div
       className={[
-        "rounded-xl border p-4",
+        "min-w-0 rounded-xl border p-3 sm:p-4",
         warning
           ? "border-red-500/60 bg-red-500/10"
           : "border-zinc-800 bg-zinc-900/60",
       ].join(" ")}
     >
-      <div className="text-xs uppercase tracking-wide text-zinc-500">
+      <div className="break-words text-xs uppercase tracking-wide text-zinc-500">
         {title}
       </div>
-      <div className="mt-1 text-xl font-semibold">{value}</div>
+      <div className="mt-1 break-words text-lg font-semibold sm:text-xl">
+        {value}
+      </div>
     </div>
   );
 }
@@ -42,7 +44,7 @@ export function KpiCards({
   result: TransitionPlanResult;
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
       <Card title="Annual cost" value={money(yearResult.annualTotalCost)} />
       <Card
         title="Annual emissions"

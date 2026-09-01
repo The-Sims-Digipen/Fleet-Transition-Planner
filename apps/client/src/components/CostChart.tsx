@@ -9,9 +9,20 @@ export function CostChart({
   const option = {
     tooltip: {
       trigger: "axis",
+      confine: true,
     },
     legend: {
+      type: "scroll",
+      top: 0,
+      left: "center",
       textStyle: { color: "#d4d4d8" },
+    },
+    grid: {
+      top: 54,
+      right: 16,
+      bottom: 30,
+      left: 8,
+      containLabel: true,
     },
     xAxis: {
       type: "category",
@@ -42,11 +53,19 @@ export function CostChart({
   };
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-300">
+    <section className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 sm:p-4">
+      <h2 className="mb-2 break-words text-sm font-semibold uppercase tracking-wide text-zinc-300">
         Cost over time
       </h2>
-      <ReactECharts option={option} style={{ height: 300 }} />
-    </div>
+      <div className="min-w-0">
+        <ReactECharts
+          option={option}
+          style={{
+            width: "100%",
+            height: "clamp(16rem, 42vw, 22rem)",
+          }}
+        />
+      </div>
+    </section>
   );
 }

@@ -180,3 +180,18 @@ The demo UI does not require the database yet.
 5. Add Scenario A / Scenario B comparison.
 6. Replace primitive boxes with GLB vehicle, charger, and depot assets.
 7. Add Web Workers only if profiling proves the simulation is expensive enough to justify them.
+
+## Responsive layout policy
+
+The UI is designed so panels are never hidden, clipped, or collapsed because of viewport width:
+
+- narrow screens stack panels vertically;
+- medium screens can place the two sidebar panels side by side;
+- wide screens use the client/server-dashboard style two-column layout;
+- grid children use `min-width: 0` so charts and 3D canvases cannot force horizontal overflow;
+- vehicle rows and timeline headers wrap instead of overflowing;
+- form controls become full-width when space is tight;
+- the 3D viewport and chart use `clamp()` rather than fixed pixel heights;
+- ECharts uses a scrollable legend and confined tooltips on narrow layouts.
+
+On a small screen the page may scroll vertically; content is not squeezed to unreadable sizes just to force the entire application into one viewport.

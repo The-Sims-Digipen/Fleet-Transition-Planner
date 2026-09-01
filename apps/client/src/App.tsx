@@ -22,29 +22,29 @@ export default function App() {
     result.years[0];
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main className="min-h-screen w-full bg-zinc-950 text-zinc-100">
       <header className="border-b border-zinc-800 bg-zinc-950/95">
-        <div className="mx-auto max-w-[1600px] px-5 py-4">
+        <div className="mx-auto w-full max-w-[1600px] px-3 py-4 sm:px-5">
           <div className="text-xs uppercase tracking-[0.25em] text-zinc-500">
             Digital Twin
           </div>
-          <h1 className="text-2xl font-semibold">
+          <h1 className="break-words text-xl font-semibold sm:text-2xl">
             Fleet Transition Planner
           </h1>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1600px] gap-5 p-5 xl:grid-cols-[330px_1fr]">
-        <aside className="space-y-5">
+      <div className="mx-auto grid w-full max-w-[1600px] min-w-0 gap-4 p-3 sm:gap-5 sm:p-5 xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]">
+        <aside className="grid min-w-0 gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-1">
           <AssumptionsPanel />
           <VehicleList />
         </aside>
 
-        <section className="space-y-5">
+        <section className="min-w-0 space-y-4 sm:space-y-5">
           <KpiCards yearResult={yearResult} result={result} />
 
           {yearResult.exceedsSiteCapacity && (
-            <div className="rounded-xl border border-red-500/60 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <div className="min-w-0 break-words rounded-xl border border-red-500/60 bg-red-500/10 px-3 py-3 text-sm text-red-100 sm:px-4">
               Site power capacity exceeded in {selectedYear}. The plan requires{" "}
               {Math.round(yearResult.peakPowerKW)} kW, above the configured{" "}
               {scenario.assumptions.sitePowerCapacityKW} kW ceiling.
