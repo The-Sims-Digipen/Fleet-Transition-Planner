@@ -12,23 +12,19 @@ export default function App() {
   const scenario = usePlannerStore((state) => state.scenario);
   const selectedYear = usePlannerStore((state) => state.selectedYear);
 
-  const result = useMemo(
-    () => calculateTransitionPlan(scenario),
-    [scenario],
-  );
+  const result = useMemo(() => calculateTransitionPlan(scenario), [scenario]);
 
   const yearResult =
-    result.years.find((item) => item.year === selectedYear) ??
-    result.years[0];
+    result.years.find((item) => item.year === selectedYear) ?? result.years[0];
 
   return (
-    <main className="min-h-screen w-full bg-zinc-950 text-zinc-100">
-      <header className="border-b border-zinc-800 bg-zinc-950/95">
+    <main className="min-h-screen w-full bg-[#0a0f1d] text-slate-100">
+      <header className="border-b border-slate-800/80 bg-[#0f172a]/95 shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <div className="mx-auto w-full max-w-[1600px] px-3 py-4 sm:px-5">
-          <div className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+          <div className="text-xs font-semibold uppercase tracking-[0.25em] text-sky-400">
             Digital Twin
           </div>
-          <h1 className="break-words text-xl font-semibold sm:text-2xl">
+          <h1 className="break-words text-xl font-bold tracking-tight text-slate-50 sm:text-2xl">
             Fleet Transition Planner
           </h1>
         </div>
@@ -44,14 +40,20 @@ export default function App() {
           <KpiCards yearResult={yearResult} result={result} />
 
           {yearResult.exceedsSiteCapacity && (
-            <div className="min-w-0 break-words rounded-xl border border-red-500/60 bg-red-500/10 px-3 py-3 text-sm text-red-100 sm:px-4">
-              Site power capacity exceeded in {selectedYear}. The plan requires{" "}
-              {Math.round(yearResult.peakPowerKW)} kW, above the configured{" "}
-              {scenario.assumptions.sitePowerCapacityKW} kW ceiling.
+            <div className="flex min-w-0 items-start gap-3 rounded-xl border border-red-500/70 bg-red-500/10 px-3 py-3 text-sm text-red-100 shadow-[0_0_24px_rgba(239,68,68,0.14)] sm:px-4">
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M12 3 2.5 20h19L12 3Z" />
+                <path d="M12 9v5M12 17.5v.5" />
+              </svg>
+              <span>
+                Site power capacity exceeded in {selectedYear}. The plan requires{" "}
+                {Math.round(yearResult.peakPowerKW)} kW, above the configured{" "}
+                {scenario.assumptions.sitePowerCapacityKW} kW ceiling.
+              </span>
             </div>
           )}
 
-          <DepotScene />
+          <DepotScene yearResult={yearResult} />
           <Timeline />
           <CostChart result={result} />
         </section>
