@@ -1,24 +1,9 @@
 import "dotenv/config";
-import Fastify from "fastify";
-import cors from "@fastify/cors";
+import { buildApp } from "./app.js";
 
-const app = Fastify({
+const app = await buildApp({
   logger: true,
 });
-
-await app.register(cors, {
-  origin: true,
-});
-
-app.get("/health", async () => ({
-  ok: true,
-  service: "fleet-transition-planner-api",
-}));
-
-app.get("/api", async () => ({
-  name: "Fleet Transition Planner API",
-  status: "starter",
-}));
 
 const port = Number(process.env.PORT ?? 3001);
 

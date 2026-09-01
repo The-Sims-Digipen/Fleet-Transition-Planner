@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Assumptions, Scenario } from "@fleet/core";
+import type { Assumptions, Scenario } from "../domain/fleet";
 import { sampleScenario } from "../sampleScenario";
 
 interface PlannerState {

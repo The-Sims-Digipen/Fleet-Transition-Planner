@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { calculateTransitionPlan } from "@fleet/core";
+import { calculateTransitionPlan } from "./domain/fleet";
 import { usePlannerStore } from "./store/plannerStore";
 import { AssumptionsPanel } from "./components/AssumptionsPanel";
 import { VehicleList } from "./components/VehicleList";

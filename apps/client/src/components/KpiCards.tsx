@@ -1,4 +1,4 @@
-import type { TransitionPlanResult, YearResult } from "@fleet/core";
+import type { TransitionPlanResult, YearResult } from "../domain/fleet";
 
 function money(value: number): string {
   return new Intl.NumberFormat("en-SG", {

@@ -1,5 +1,5 @@
 import ReactECharts from "echarts-for-react";
-import type { TransitionPlanResult } from "@fleet/core";
+import type { TransitionPlanResult } from "../domain/fleet";
 
 export function CostChart({
   result,

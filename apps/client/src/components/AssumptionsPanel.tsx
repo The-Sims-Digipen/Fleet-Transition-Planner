@@ -1,4 +1,4 @@
-import type { Assumptions } from "@fleet/core";
+import type { Assumptions } from "../domain/fleet";
 import { usePlannerStore } from "../store/plannerStore";
 
 type NumericAssumptionKey =

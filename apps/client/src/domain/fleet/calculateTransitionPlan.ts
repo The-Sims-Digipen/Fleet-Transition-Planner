@@ -4,7 +4,7 @@ import type {
   TransitionPlanResult,
   Vehicle,
   YearResult,
-} from "./types";
+} from "./types.js";
 
 function operatingCostForVehicle(
   vehicle: Vehicle,

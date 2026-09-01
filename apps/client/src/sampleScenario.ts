@@ -1,4 +1,4 @@
-import type { Scenario } from "@fleet/core";
+import type { Scenario } from "./domain/fleet";
 
 export const sampleScenario: Scenario = {
   id: "scenario-a",

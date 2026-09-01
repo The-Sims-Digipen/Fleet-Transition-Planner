@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { calculateTransitionPlan } from "./calculateTransitionPlan";
-import type { Scenario } from "./types";
+import { calculateTransitionPlan } from "./calculateTransitionPlan.js";
+import type { Scenario } from "./types.js";
 
 describe("calculateTransitionPlan", () => {
   it("moves vehicles from diesel to electric in the assigned year", () => {

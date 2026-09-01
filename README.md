@@ -1,87 +1,158 @@
 # Fleet Transition Planner — Starter
 
-A starter monorepo for the browser-based **Fleet Transition Planner**.
-
-## What is already included
-
-- React + Vite + TypeScript
-- React Three Fiber + Drei
-- Zustand
-- TanStack Query
-- ECharts
-- Tailwind CSS 4 (Vite plugin)
-- Fastify backend
-- PostgreSQL + Drizzle scaffold
-- Shared TypeScript calculation engine
-- Basic 3D depot
-- Vehicle transition-year controls
-- Editable assumptions
-- Timeline/year scrubber
-- Cost / emissions / EV count / peak power KPIs
-- Cost chart
-- Site-capacity warning
-
-> The formulas are intentionally simple starter formulas. Replace them with the
-> partner's real fleet, cost, emissions and charging rules once the full brief is provided.
+A deliberately separated React/Fastify web application for the Fleet Transition Planner.
 
 ## Architecture
 
 ```text
-apps/
-  web/        React application and 3D scene
-  server/     Fastify API + database scaffold
-
-packages/
-  core/       Domain types and calculation engine
+Browser / client                     Server
+────────────────────────────────────────────────────
+React + Vite                         Fastify
+React Three Fiber                    Zod / API validation
+Zustand                              Drizzle
+TanStack Query                       PostgreSQL
+ECharts
+        │
+        │ HTTP / JSON
+        └──────────────────────────►
 ```
 
-The important dependency direction is:
+Fleet calculations are plain TypeScript modules inside the client application:
 
 ```text
-Scenario + Assumptions
-        |
-        v
-Calculation Engine
-        |
-        +------> Dashboard / Charts
-        |
-        +------> 3D Depot
-        |
-        +------> Timeline
+apps/client/src/domain/fleet/
+├── types.ts
+├── calculateTransitionPlan.ts
+├── calculateTransitionPlan.test.ts
+└── index.ts
 ```
 
-The calculation engine does not import React, Three.js, Fastify or database code.
+They are separated from React components so the business logic stays easy to understand and test, but they are not a separate package or service.
+
+## Project structure
+
+```text
+fleet-transition-planner/
+├── apps/
+│   ├── client/
+│   │   └── src/
+│   │       ├── components/
+│   │       ├── domain/
+│   │       │   └── fleet/
+│   │       ├── store/
+│   │       └── main.tsx
+│   │
+│   └── server/
+│       └── src/
+│           ├── db/
+│           ├── app.ts
+│           └── index.ts
+│
+├── package.json
+└── pnpm-workspace.yaml
+```
+
+Responsibilities are intentionally straightforward:
+
+- **Client:** interactive simulation, 3D rendering, charts, UI state, and scenario editing.
+- **Server:** persistence, database access, API validation, and future external integrations.
+- **`client/src/domain/fleet`:** pure fleet calculation/domain logic used by the client. No React, Three.js, HTTP, or database code.
+
+## Included
+
+- React + Vite + TypeScript
+- Fastify backend
+- React Three Fiber + Drei + Three.js
+- Zustand and TanStack Query
+- ECharts
+- Tailwind CSS
+- PostgreSQL + Drizzle scaffold
+- Pure TypeScript fleet calculation modules
+- Basic 3D depot and transition timeline
+- Real calculation, client-component, and Fastify tests
+
+The starter formulas are intentionally placeholders. Replace them with the partner's actual fleet, cost, emissions, charger, and power rules when the full specification is available.
 
 ## Requirements
 
 - Node.js 22+
-- pnpm 10+
-- PostgreSQL only when you start using persistence
+- pnpm 11+
+- PostgreSQL only once persistence is used
 
-## Start
+## Install
 
 ```bash
 pnpm install
+```
+
+If pnpm reports ignored dependency build scripts, review them with:
+
+```bash
+pnpm approve-builds
+```
+
+Approve only scripts you understand and intend to trust.
+
+## Development
+
+Run client and server together:
+
+```bash
 pnpm dev
 ```
 
-Then open:
+Or separately:
 
-```text
-http://localhost:5173
+```bash
+pnpm dev:client
+pnpm dev:server
 ```
 
-The API starts at:
+- Client: http://localhost:5173
+- API: http://localhost:3001
+- Health: http://localhost:3001/health
 
-```text
-http://localhost:3001
+## Verification
+
+Run:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
-Test it with:
+Or all checks together:
 
-```text
-http://localhost:3001/health
+```bash
+pnpm verify
 ```
+
+The tests are real rather than being hidden with a no-tests-success flag:
+
+- Client domain test: transition calculation behavior
+- Client component test: vehicle transition-year editing
+- Server test: Fastify health route through `app.inject()` without opening a port
+
+## Why calculation code is still its own folder
+
+The calculation code is separated logically, not operationally.
+
+This is useful:
+
+```ts
+const result = calculateTransitionPlan(scenario);
+```
+
+because React components should not contain cost, emissions, charging, and payback formulas.
+
+But a separate workspace package would add build and dependency complexity without a concrete benefit for this single web application.
+
+## Why the server is split into `app.ts` and `index.ts`
+
+`app.ts` constructs the Fastify application. `index.ts` is only the process entry point that opens the network port.
+
+This allows tests to exercise the server using Fastify's in-process `app.inject()` API without starting a real server.
 
 ## Database
 
@@ -98,18 +169,14 @@ pnpm --filter @fleet/server db:generate
 pnpm --filter @fleet/server db:migrate
 ```
 
-The starter does not require the database to render the demo.
+The demo UI does not require the database yet.
 
 ## Recommended next steps
 
 1. Replace sample vehicles with partner data.
-2. Define exact financial and emissions formulas with the industry mentor.
-3. Persist scenarios and fleets in PostgreSQL.
-4. Add Scenario A / Scenario B comparison.
-5. Replace primitive boxes with GLB vehicle/charger/depot assets.
-6. Move the calculation engine to a Web Worker if real datasets become expensive.
-7. Add authentication and organisation/depot ownership only when required.
-
-## Dependency policy
-
-The starter tracks the current stable npm `latest` release for its direct third-party dependencies as of 1 September 2026. Pre-release tags such as `next`, `beta`, `rc`, `canary`, and `experimental` are intentionally excluded.
+2. Define exact financial, emissions, and charging formulas with the industry mentor.
+3. Persist fleets, depots, and scenarios in PostgreSQL.
+4. Model scenario-specific transition years separately from base vehicle records.
+5. Add Scenario A / Scenario B comparison.
+6. Replace primitive boxes with GLB vehicle, charger, and depot assets.
+7. Add Web Workers only if profiling proves the simulation is expensive enough to justify them.
