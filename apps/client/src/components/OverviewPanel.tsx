@@ -22,8 +22,10 @@ export function OverviewPanel({ result, yearResult }: {
         </div>
         <PlanSwitch />
       </div>
-      <Timeline />
-      <CapacityGauge yearResult={yearResult} />
+      <div className="overview-control-grid">
+        <Timeline />
+        <CapacityGauge yearResult={yearResult} />
+      </div>
       {yearResult.exceedsSiteCapacity && (
         <div className="alert-banner" role="alert">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

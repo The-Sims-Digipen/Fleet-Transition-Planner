@@ -13,8 +13,8 @@ export function CapacityGauge({ yearResult }: { yearResult: YearResult }) {
     <section className={`panel-card capacity-card tone-${tone}`} aria-labelledby="capacity-title">
       <div className="section-heading-row compact-heading">
         <div>
-          <p className="eyebrow">Depot substation</p>
           <h2 id="capacity-title" className="section-title">Peak power</h2>
+          <p className="section-caption">Depot substation</p>
         </div>
         <span className={`status-badge status-${tone}`}>{status}</span>
       </div>
@@ -28,7 +28,7 @@ export function CapacityGauge({ yearResult }: { yearResult: YearResult }) {
         aria-label="Site power capacity used"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={Math.round(percentage)}
+        aria-valuenow={Math.min(100, Math.round(percentage))}
         aria-valuetext={`${Math.round(percentage)} percent, ${status}`}
       >
         <span className="capacity-fill" style={{ width: `${Math.min(100, percentage)}%` }} />

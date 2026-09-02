@@ -13,8 +13,8 @@ export function Timeline() {
     <section className="panel-card timeline-card" aria-labelledby="timeline-title">
       <div className="section-heading-row compact-heading">
         <div>
-          <p className="eyebrow">Scrub to inspect the depot</p>
           <h2 id="timeline-title" className="section-title">Transition timeline</h2>
+          <p className="section-caption">Scrub to inspect the depot</p>
         </div>
         <output className="year-output" aria-live="polite">{selectedYear}</output>
       </div>
