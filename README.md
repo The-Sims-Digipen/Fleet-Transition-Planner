@@ -2,12 +2,34 @@
 
 A web application for planning the transition of a vehicle fleet from diesel to electric. It includes an interactive 3D depot, vehicle transition scheduling, editable cost and energy assumptions, fleet cost and emissions calculations, power-capacity feedback, charts, and a year-by-year timeline.
 
+## Demo
+
+[Fleet Transition Planner](https://fleet-transition-planner-client.vercel.app)
+
+## Prerequisites
+
+Required:
+
+- [Node.js 22 or newer](https://nodejs.org/en/download) (install an LTS release).
+- pnpm. After installing Node.js, install pnpm with:
+
+  ```bash
+  npx get-pnpm
+  ```
+
+- [Git](https://git-scm.com/downloads), if you need to clone the repository.
+- A browser with WebGL enabled to use the interactive 3D depot.
+
+Verify the required tools from a new terminal:
+
+```bash
+node --version
+pnpm --version
+```
+
+The Node.js version should be 22 or newer and the pnpm version should be 11.24.0 or newer. Also ensure ports `5173` and `3001` are available for the development servers.
+
 ## Development
-
-Requirements:
-
-- Node.js 22+
-- pnpm 11+
 
 Install dependencies:
 
@@ -29,23 +51,6 @@ Run verification:
 
 ```bash
 pnpm verify
-```
-
-## Database
-
-PostgreSQL is only required once persistence is used.
-
-Copy the server environment file and set `DATABASE_URL`:
-
-```bash
-cp apps/server/.env.example apps/server/.env
-```
-
-Then run:
-
-```bash
-pnpm --filter @fleet/server db:generate
-pnpm --filter @fleet/server db:migrate
 ```
 
 ## Production
