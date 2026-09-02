@@ -6,10 +6,12 @@ type CashSeriesPoint = {
   value: [number, number];
   year: number;
   phase: "after-capital" | "year-end";
+  baselineFuelThisYear: number;
+  planDieselThisYear: number;
+  planElectricityThisYear: number;
   capitalThisYear: number;
-  operatingSavingsThisYear: number;
-  cumulativeCapital: number;
-  cumulativeOperatingSavings: number;
+  cumulativeBaselineCost: number;
+  cumulativePlanCost: number;
 };
 
 const durationFormat = new Intl.NumberFormat("en-SG", {
@@ -33,20 +35,25 @@ function toCashSeries(points: PaybackProjectionPoint[]): CashSeriesPoint[] {
       value: [point.elapsedYears - 1, Math.round(point.netPositionBeforeOperations)],
       year: point.year,
       phase: "after-capital",
+      baselineFuelThisYear: point.annualBaselineFuelCost,
+      planDieselThisYear: point.annualPlanDieselCost,
+      planElectricityThisYear: point.annualPlanElectricCost,
       capitalThisYear: point.annualCapitalCost,
-      operatingSavingsThisYear: point.annualOperatingSavings,
-      cumulativeCapital: point.cumulativeCapitalCost,
-      cumulativeOperatingSavings:
-        point.cumulativeOperatingSavings - point.annualOperatingSavings,
+      cumulativeBaselineCost:
+        point.cumulativeBaselineCost - point.annualBaselineFuelCost,
+      cumulativePlanCost:
+        point.cumulativePlanCost - point.annualPlanOperatingCost,
     };
     const yearEnd: CashSeriesPoint = {
       value: [point.elapsedYears, Math.round(point.netPosition)],
       year: point.year,
       phase: "year-end",
+      baselineFuelThisYear: point.annualBaselineFuelCost,
+      planDieselThisYear: point.annualPlanDieselCost,
+      planElectricityThisYear: point.annualPlanElectricCost,
       capitalThisYear: point.annualCapitalCost,
-      operatingSavingsThisYear: point.annualOperatingSavings,
-      cumulativeCapital: point.cumulativeCapitalCost,
-      cumulativeOperatingSavings: point.cumulativeOperatingSavings,
+      cumulativeBaselineCost: point.cumulativeBaselineCost,
+      cumulativePlanCost: point.cumulativePlanCost,
     };
 
     return index === 0 || point.annualCapitalCost > 0
@@ -101,7 +108,8 @@ export function CostChart({ result, selectedYear }: {
   const spread = Math.max(1_000, rawMax - rawMin);
   const axisMin = Math.floor(rawMin - spread * 0.12);
   const axisMax = Math.ceil(rawMax + spread * 0.12);
-  const xMax = finalPoint?.elapsedYears ?? 1;
+  const xMax = (finalPoint?.elapsedYears ?? 1) +
+    (projection.paybackYears === null ? 0 : 1);
   const xInterval = xMax <= 10 ? 1 : 2;
 
   const markLines: Array<Record<string, unknown>> = [
@@ -111,7 +119,7 @@ export function CostChart({ result, selectedYear }: {
       lineStyle: { color: "rgba(226, 232, 240, 0.72)", type: "dashed", width: 2 },
       label: {
         show: true,
-        position: "insideEndTop",
+        position: "insideStartTop",
         formatter: "Investment fully recovered · $0",
         color: "#e2e8f0",
         backgroundColor: "rgba(12, 20, 36, 0.9)",
@@ -129,6 +137,9 @@ export function CostChart({ result, selectedYear }: {
       label: {
         show: true,
         position: "insideEndTop",
+        align: selectedElapsed < xMax / 2 ? "left" : "right",
+        rotate: 0,
+        distance: 6,
         formatter: `Selected ${selectedYear}`,
         color: "#bae6fd",
         backgroundColor: "rgba(12, 20, 36, 0.9)",
@@ -159,16 +170,18 @@ export function CostChart({ result, selectedYear }: {
         return [
           `<strong>${point.year} · ${isYearEnd ? "End of year" : "After scheduled purchases"}</strong>`,
           `Years since first transition: ${durationFormat.format(point.value[0])}`,
-          `Capital invested this year: ${money.format(point.capitalThisYear)}`,
-          `Operating savings this year: ${money.format(point.operatingSavingsThisYear)}`,
-          `Cumulative capital: ${money.format(point.cumulativeCapital)}`,
-          `Cumulative operating savings: ${money.format(point.cumulativeOperatingSavings)}`,
-          `Position: ${positionLabel(point.value[1])}`,
+          `Before · all-diesel fuel this year: ${money.format(point.baselineFuelThisYear)}`,
+          `After · remaining diesel this year: ${money.format(point.planDieselThisYear)}`,
+          `After · EV electricity this year: ${money.format(point.planElectricityThisYear)}`,
+          `After · EV and charger purchases: ${money.format(point.capitalThisYear)}`,
+          `Before · cumulative all-diesel cost: ${money.format(point.cumulativeBaselineCost)}`,
+          `After · cumulative plan cost: ${money.format(point.cumulativePlanCost)}`,
+          `Total-cost difference: ${positionLabel(point.value[1])}`,
         ].join("<br/>");
       },
     },
     legend: {
-      data: ["Cumulative net position"],
+      data: ["Before cost − after cost"],
       top: 0,
       left: "center",
       textStyle: { color: "#cbd5e1" },
@@ -200,7 +213,7 @@ export function CostChart({ result, selectedYear }: {
     },
     series: [
       {
-        name: "Cumulative net position",
+        name: "Before cost − after cost",
         type: "line",
         z: 3,
         showSymbol: true,
@@ -255,8 +268,8 @@ export function CostChart({ result, selectedYear }: {
     <section className="panel-card" aria-labelledby="cost-chart-title">
       <div className="section-heading-row compact-heading">
         <div>
-          <p className="eyebrow">Active plan cash recovery</p>
-          <h2 id="cost-chart-title" className="section-title">Investment payback</h2>
+          <p className="eyebrow">All-diesel baseline against the active plan</p>
+          <h2 id="cost-chart-title" className="section-title">Total-cost payback</h2>
         </div>
       </div>
       <div className={`cost-chart-insight tone-${outcome.tone}`} role="status">
@@ -264,7 +277,7 @@ export function CostChart({ result, selectedYear }: {
         <span>{outcome.detail}</span>
       </div>
       <p className="sr-only">
-        This chart shows cumulative operating savings after capital investment from the first EV transition. Values below zero are unrecovered investment; crossing zero is full-plan payback; values above zero are net savings. {outcome.title}. {outcome.detail}
+        This chart subtracts the active plan&apos;s cumulative total cost from the cumulative cost of retaining an all-diesel fleet. The active plan includes EV and charger purchases, diesel for vehicles not yet transitioned, and electricity for EVs. Values below zero are unrecovered cost; crossing zero is full-plan payback; values above zero are net savings. {outcome.title}. {outcome.detail}
       </p>
       {hasTransitionInvestment ? (
         <>
@@ -272,7 +285,7 @@ export function CostChart({ result, selectedYear }: {
             <span><i className="zone-unrecovered" aria-hidden="true" />Below $0 · investment not yet recovered</span>
             <span><i className="zone-savings" aria-hidden="true" />Above $0 · net savings</span>
           </div>
-          <p className="chart-unit-label">Cumulative net position (SGD)</p>
+          <p className="chart-unit-label">Cumulative total-cost difference (SGD)</p>
           <ReactECharts option={option} style={{ width: "100%", height: "20rem" }} />
           <details className="data-table-disclosure payback-data-table">
             <summary>View payback data</summary>
@@ -282,11 +295,12 @@ export function CostChart({ result, selectedYear }: {
                   <tr>
                     <th>Calendar year</th>
                     <th>Years since first transition</th>
-                    <th>Capital invested</th>
-                    <th>Operating savings</th>
-                    <th>Cumulative capital</th>
-                    <th>Cumulative operating savings</th>
-                    <th>Net position</th>
+                    <th>Before · cumulative all-diesel</th>
+                    <th>After · cumulative active plan</th>
+                    <th>Plan capital this year</th>
+                    <th>Plan diesel this year</th>
+                    <th>Plan electricity this year</th>
+                    <th>Total-cost difference</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -294,10 +308,11 @@ export function CostChart({ result, selectedYear }: {
                     <tr key={point.year} className={point.year === selectedYear ? "is-selected" : undefined}>
                       <th scope="row">{point.year}</th>
                       <td>{durationFormat.format(point.elapsedYears)}</td>
+                      <td>{money.format(point.cumulativeBaselineCost)}</td>
+                      <td>{money.format(point.cumulativePlanCost)}</td>
                       <td>{money.format(point.annualCapitalCost)}</td>
-                      <td>{money.format(point.annualOperatingSavings)}</td>
-                      <td>{money.format(point.cumulativeCapitalCost)}</td>
-                      <td>{money.format(point.cumulativeOperatingSavings)}</td>
+                      <td>{money.format(point.annualPlanDieselCost)}</td>
+                      <td>{money.format(point.annualPlanElectricCost)}</td>
                       <td>{positionLabel(point.netPosition)}</td>
                     </tr>
                   ))}

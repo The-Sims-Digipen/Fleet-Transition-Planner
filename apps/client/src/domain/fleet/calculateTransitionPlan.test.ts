@@ -65,6 +65,15 @@ describe("fleet transition calculations", () => {
     expect(result.payback.paybackCalendarYear).toBeCloseTo(2034.230769, 5);
     expect(result.payback.points.at(-1)?.year).toBe(2034);
     expect(result.paybackYear).toBe(2034);
+
+    const firstPaybackPoint = result.payback.points[0];
+    expect(firstPaybackPoint.annualBaselineFuelCost).toBe(3000);
+    expect(firstPaybackPoint.annualPlanDieselCost).toBe(0);
+    expect(firstPaybackPoint.annualPlanElectricCost).toBe(400);
+    expect(firstPaybackPoint.cumulativePlanCost).toBe(11400);
+    expect(firstPaybackPoint.netPosition).toBe(
+      firstPaybackPoint.cumulativeBaselineCost - firstPaybackPoint.cumulativePlanCost,
+    );
   });
 
   it("caps a non-viable payback projection at the requested duration", () => {

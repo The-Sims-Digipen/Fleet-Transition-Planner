@@ -88,8 +88,14 @@ export interface YearResult {
 export interface PaybackProjectionPoint {
   year: number;
   elapsedYears: number;
+  annualBaselineFuelCost: number;
+  annualPlanDieselCost: number;
+  annualPlanElectricCost: number;
+  annualPlanOperatingCost: number;
   annualCapitalCost: number;
   annualOperatingSavings: number;
+  cumulativeBaselineCost: number;
+  cumulativePlanCost: number;
   cumulativeCapitalCost: number;
   cumulativeOperatingSavings: number;
   netPositionBeforeOperations: number;

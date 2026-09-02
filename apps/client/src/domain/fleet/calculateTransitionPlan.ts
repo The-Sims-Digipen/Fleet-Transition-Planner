@@ -137,6 +137,8 @@ export function calculatePaybackProjection(
   const points: PaybackProjection["points"] = [];
   let cumulativeCapitalCost = 0;
   let cumulativeOperatingSavings = 0;
+  let cumulativeBaselineCost = 0;
+  let cumulativePlanCost = 0;
   let netPosition = 0;
   let paybackYears: number | null = null;
   let paybackCalendarYear: number | null = null;
@@ -146,24 +148,37 @@ export function calculatePaybackProjection(
       (vehicle) => vehicle.transitionYear === year,
     ).length;
     const annualCapitalCost = transitioningThisYear * transitionCost;
-    const annualPlanOperatingCost = plan.vehicles.reduce((total, vehicle) => {
+    let annualPlanDieselCost = 0;
+    let annualPlanElectricCost = 0;
+    for (const vehicle of plan.vehicles) {
       const isElectric =
         vehicle.transitionYear !== null && vehicle.transitionYear <= year;
-      return total + operatingCostForVehicle(vehicle, isElectric, assumptions);
-    }, 0);
+      const vehicleCost = operatingCostForVehicle(vehicle, isElectric, assumptions);
+      if (isElectric) annualPlanElectricCost += vehicleCost;
+      else annualPlanDieselCost += vehicleCost;
+    }
+    const annualPlanOperatingCost = annualPlanDieselCost + annualPlanElectricCost;
     const annualOperatingSavings = baseline.cost - annualPlanOperatingCost;
     const netPositionBeforeOperations = netPosition - annualCapitalCost;
 
     cumulativeCapitalCost += annualCapitalCost;
     cumulativeOperatingSavings += annualOperatingSavings;
-    netPosition = netPositionBeforeOperations + annualOperatingSavings;
+    cumulativeBaselineCost += baseline.cost;
+    cumulativePlanCost += annualCapitalCost + annualPlanOperatingCost;
+    netPosition = cumulativeBaselineCost - cumulativePlanCost;
 
     const elapsedYears = year - firstTransitionYear + 1;
     points.push({
       year,
       elapsedYears,
+      annualBaselineFuelCost: baseline.cost,
+      annualPlanDieselCost,
+      annualPlanElectricCost,
+      annualPlanOperatingCost,
       annualCapitalCost,
       annualOperatingSavings,
+      cumulativeBaselineCost,
+      cumulativePlanCost,
       cumulativeCapitalCost,
       cumulativeOperatingSavings,
       netPositionBeforeOperations,
