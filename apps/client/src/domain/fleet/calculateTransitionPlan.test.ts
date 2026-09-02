@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculatePaybackProjection,
   calculateTransitionPlan,
   calculateVehicleEconomics,
   optimizeTransitionPlan,
@@ -49,7 +50,34 @@ describe("fleet transition calculations", () => {
   it("does not report payback when no transition occurs", () => {
     const result = calculateTransitionPlan(plan([vehicle("v1", 30000, null)]), assumptions);
     expect(result.paybackYear).toBeNull();
+    expect(result.payback.points).toEqual([]);
     expect(result.totalCapitalCost).toBe(0);
+  });
+
+  it("projects fractional payback beyond the editable planning horizon", () => {
+    const result = calculateTransitionPlan(
+      plan([vehicle("v1", 10000, assumptions.endYear)]),
+      assumptions,
+    );
+
+    expect(result.years.at(-1)?.year).toBe(assumptions.endYear);
+    expect(result.payback.paybackYears).toBeCloseTo(11000 / 2600, 5);
+    expect(result.payback.paybackCalendarYear).toBeCloseTo(2034.230769, 5);
+    expect(result.payback.points.at(-1)?.year).toBe(2034);
+    expect(result.paybackYear).toBe(2034);
+  });
+
+  it("caps a non-viable payback projection at the requested duration", () => {
+    const projection = calculatePaybackProjection(
+      plan([vehicle("v1", 30000, 2026)]),
+      { ...assumptions, electricityPricePerKWh: 2 },
+      5,
+    );
+
+    expect(projection.paybackYears).toBeNull();
+    expect(projection.points).toHaveLength(5);
+    expect(projection.points.at(-1)?.elapsedYears).toBe(5);
+    expect(projection.points.at(-1)?.netPosition).toBeLessThan(0);
   });
 
   it("marks a vehicle non-viable when electricity costs more than diesel", () => {

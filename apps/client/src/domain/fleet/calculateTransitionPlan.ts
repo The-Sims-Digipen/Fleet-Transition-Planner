@@ -1,6 +1,7 @@
 import type {
   Assumptions,
   OptimizationResult,
+  PaybackProjection,
   PaybackBand,
   PlanSummary,
   TransitionPlan,
@@ -93,6 +94,109 @@ function baselineTotals(vehicles: Vehicle[], assumptions: Assumptions) {
   );
 }
 
+export const DEFAULT_PAYBACK_PROJECTION_YEARS = 20;
+
+/**
+ * Projects the plan's cumulative cash position from its first transition.
+ * Capital is applied at the start of each transition year and operating
+ * savings accrue through that year. The projection stops once the complete
+ * plan has paid back, or at the configured projection limit.
+ */
+export function calculatePaybackProjection(
+  plan: TransitionPlan,
+  assumptions: Assumptions,
+  projectionLimitYears = DEFAULT_PAYBACK_PROJECTION_YEARS,
+): PaybackProjection {
+  const transitionYears = plan.vehicles.flatMap((vehicle) =>
+    vehicle.transitionYear === null ? [] : [vehicle.transitionYear],
+  );
+
+  if (transitionYears.length === 0) {
+    return {
+      points: [],
+      firstTransitionYear: null,
+      finalTransitionYear: null,
+      paybackYears: null,
+      paybackCalendarYear: null,
+      projectionLimitYears,
+      totalCapitalCost: 0,
+    };
+  }
+
+  const firstTransitionYear = Math.min(...transitionYears);
+  const finalTransitionYear = Math.max(...transitionYears);
+  const safeProjectionLimit = Math.max(1, Math.floor(projectionLimitYears));
+  const projectionEndYear = Math.max(
+    finalTransitionYear,
+    firstTransitionYear + safeProjectionLimit - 1,
+  );
+  const baseline = baselineTotals(plan.vehicles, assumptions);
+  const transitionCost =
+    assumptions.electricVehiclePurchaseCost + assumptions.chargerCost;
+
+  const points: PaybackProjection["points"] = [];
+  let cumulativeCapitalCost = 0;
+  let cumulativeOperatingSavings = 0;
+  let netPosition = 0;
+  let paybackYears: number | null = null;
+  let paybackCalendarYear: number | null = null;
+
+  for (let year = firstTransitionYear; year <= projectionEndYear; year += 1) {
+    const transitioningThisYear = plan.vehicles.filter(
+      (vehicle) => vehicle.transitionYear === year,
+    ).length;
+    const annualCapitalCost = transitioningThisYear * transitionCost;
+    const annualPlanOperatingCost = plan.vehicles.reduce((total, vehicle) => {
+      const isElectric =
+        vehicle.transitionYear !== null && vehicle.transitionYear <= year;
+      return total + operatingCostForVehicle(vehicle, isElectric, assumptions);
+    }, 0);
+    const annualOperatingSavings = baseline.cost - annualPlanOperatingCost;
+    const netPositionBeforeOperations = netPosition - annualCapitalCost;
+
+    cumulativeCapitalCost += annualCapitalCost;
+    cumulativeOperatingSavings += annualOperatingSavings;
+    netPosition = netPositionBeforeOperations + annualOperatingSavings;
+
+    const elapsedYears = year - firstTransitionYear + 1;
+    points.push({
+      year,
+      elapsedYears,
+      annualCapitalCost,
+      annualOperatingSavings,
+      cumulativeCapitalCost,
+      cumulativeOperatingSavings,
+      netPositionBeforeOperations,
+      netPosition,
+    });
+
+    if (
+      paybackYears === null &&
+      year >= finalTransitionYear &&
+      netPosition >= 0
+    ) {
+      const fractionOfYear = netPositionBeforeOperations >= 0
+        ? 0
+        : annualOperatingSavings > 0
+          ? Math.min(1, Math.max(0, -netPositionBeforeOperations / annualOperatingSavings))
+          : 0;
+      paybackYears = year - firstTransitionYear + fractionOfYear;
+      paybackCalendarYear = year + fractionOfYear;
+      break;
+    }
+  }
+
+  return {
+    points,
+    firstTransitionYear,
+    finalTransitionYear,
+    paybackYears,
+    paybackCalendarYear,
+    projectionLimitYears: safeProjectionLimit,
+    totalCapitalCost: cumulativeCapitalCost,
+  };
+}
+
 /**
  * One EV and charger are purchased per transition. Chargers remain installed,
  * and an all-diesel fleet is the comparison baseline.
@@ -103,15 +207,7 @@ export function calculateTransitionPlan(
 ): TransitionPlanResult {
   const years: YearResult[] = [];
   const baseline = baselineTotals(plan.vehicles, assumptions);
-  const firstTransitionYear = plan.vehicles.reduce<number | null>(
-    (earliest, vehicle) => {
-      if (vehicle.transitionYear === null) return earliest;
-      return earliest === null
-        ? vehicle.transitionYear
-        : Math.min(earliest, vehicle.transitionYear);
-    },
-    null,
-  );
+  const payback = calculatePaybackProjection(plan, assumptions);
 
   let cumulativeCost = 0;
   let cumulativeCapitalCost = 0;
@@ -119,7 +215,6 @@ export function calculateTransitionPlan(
   let cumulativeEmissions = 0;
   let cumulativeEmissionsAvoided = 0;
   let baselineCumulativeCost = 0;
-  let paybackYear: number | null = null;
 
   for (
     let year = assumptions.startYear;
@@ -175,15 +270,6 @@ export function calculateTransitionPlan(
     cumulativeEmissionsAvoided += annualEmissionsAvoidedKgCO2;
     baselineCumulativeCost += baseline.cost;
 
-    if (
-      paybackYear === null &&
-      firstTransitionYear !== null &&
-      year >= firstTransitionYear &&
-      baselineCumulativeCost >= cumulativeCost
-    ) {
-      paybackYear = year;
-    }
-
     const chargersRequired = electricVehicles;
     const peakPowerKW = chargersRequired * assumptions.chargerPowerKW;
 
@@ -214,7 +300,10 @@ export function calculateTransitionPlan(
 
   return {
     years,
-    paybackYear,
+    paybackYear: payback.paybackCalendarYear === null
+      ? null
+      : Math.floor(payback.paybackCalendarYear),
+    payback,
     totalCapitalCost: cumulativeCapitalCost,
     totalEnergyCost: cumulativeEnergyCost,
     totalCost: cumulativeCost,

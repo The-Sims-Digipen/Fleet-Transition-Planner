@@ -85,9 +85,31 @@ export interface YearResult {
   exceedsSiteCapacity: boolean;
 }
 
+export interface PaybackProjectionPoint {
+  year: number;
+  elapsedYears: number;
+  annualCapitalCost: number;
+  annualOperatingSavings: number;
+  cumulativeCapitalCost: number;
+  cumulativeOperatingSavings: number;
+  netPositionBeforeOperations: number;
+  netPosition: number;
+}
+
+export interface PaybackProjection {
+  points: PaybackProjectionPoint[];
+  firstTransitionYear: number | null;
+  finalTransitionYear: number | null;
+  paybackYears: number | null;
+  paybackCalendarYear: number | null;
+  projectionLimitYears: number;
+  totalCapitalCost: number;
+}
+
 export interface TransitionPlanResult {
   years: YearResult[];
   paybackYear: number | null;
+  payback: PaybackProjection;
   totalCapitalCost: number;
   totalEnergyCost: number;
   totalCost: number;
