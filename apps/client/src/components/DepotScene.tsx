@@ -2,6 +2,7 @@ import { Canvas, type ThreeEvent, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CatmullRomCurve3, Vector3 } from "three";
+import { getDepotVehicleCohort } from "../domain/fleet";
 import type { Vehicle, YearResult } from "../domain/fleet";
 import { usePlannerStore } from "../store/plannerStore";
 
@@ -382,12 +383,7 @@ export function DepotScene({ yearResult }: { yearResult: YearResult }) {
   const selectedVehicleId = usePlannerStore((state) => state.selectedVehicleId);
   const setSelectedVehicleId = usePlannerStore((state) => state.setSelectedVehicleId);
   const displayVehicles = useMemo(() => {
-    const selectedIndex = selectedVehicleId
-      ? vehicles.findIndex((vehicle) => vehicle.id === selectedVehicleId)
-      : -1;
-    const desiredStart = selectedIndex >= 0 ? Math.floor(selectedIndex / 6) * 6 : 0;
-    const start = Math.min(desiredStart, Math.max(0, vehicles.length - 6));
-    return vehicles.slice(start, start + 6).map((vehicle, index) => ({
+    return getDepotVehicleCohort(vehicles, selectedVehicleId).map((vehicle, index) => ({
       ...vehicle,
       parkingPosition: compactDepotPositions[index],
     }));
@@ -403,6 +399,7 @@ export function DepotScene({ yearResult }: { yearResult: YearResult }) {
     >
       <p className="sr-only">
         This focused depot view shows six of the plan&apos;s 100 vehicles.
+        Displayed registrations: {displayVehicles.map((vehicle) => vehicle.registration).join(", ")}.
         {displayedElectricVehicles} displayed vehicles are electric in {selectedYear}.
         Peak fleet power is {Math.round(yearResult.peakPowerKW)} kilowatts.
         {yearResult.exceedsSiteCapacity ? " Site capacity is exceeded." : " Site capacity is within its limit."}

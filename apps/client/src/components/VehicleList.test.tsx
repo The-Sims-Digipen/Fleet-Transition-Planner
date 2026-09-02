@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { sampleAssumptions, sampleWorkspace } from "../sampleScenario";
@@ -44,5 +44,31 @@ describe("FleetPlanner", () => {
     await user.type(screen.getByRole("searchbox", { name: "Search fleet" }), "SGV-001");
     await user.click(screen.getByRole("button", { name: "SGV-001" }));
     expect(usePlannerStore.getState().selectedVehicleId).toBe("v-001");
+  });
+
+  it("shows only the same six-vehicle cohort as the depot", () => {
+    render(<FleetPlanner />);
+    const inspector = screen.getByRole("list", { name: "Depot entities" });
+
+    expect(inspector).toHaveAttribute("data-visible-rows", "6");
+    expect(within(inspector).getAllByRole("listitem")).toHaveLength(6);
+    expect(within(inspector).getByRole("button", { name: "SGV-001" })).toBeInTheDocument();
+    expect(within(inspector).getByRole("button", { name: "SGV-006" })).toBeInTheDocument();
+    expect(within(inspector).queryByRole("button", { name: "SGV-007" })).not.toBeInTheDocument();
+  });
+
+  it("loads a filtered vehicle's six-van cohort into the depot inspector", async () => {
+    const user = userEvent.setup();
+    render(<FleetPlanner />);
+
+    await user.type(screen.getByRole("searchbox", { name: "Search fleet" }), "SGV-021");
+    await user.click(screen.getByRole("button", { name: "Show top match in depot" }));
+
+    const inspector = screen.getByRole("list", { name: "Depot entities" });
+    expect(within(inspector).getAllByRole("listitem")).toHaveLength(6);
+    expect(within(inspector).getByRole("button", { name: "SGV-019" })).toBeInTheDocument();
+    expect(within(inspector).getByRole("button", { name: "SGV-021" })).toBeInTheDocument();
+    expect(within(inspector).getByRole("button", { name: "SGV-024" })).toBeInTheDocument();
+    expect(usePlannerStore.getState().selectedVehicleId).toBe("v-021");
   });
 });

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { calculateVehicleEconomics } from "../domain/fleet";
+import { useMemo, useState } from "react";
+import { calculateVehicleEconomics, getDepotVehicleCohort } from "../domain/fleet";
 import type { PaybackBand, Vehicle } from "../domain/fleet";
 import { usePlannerStore } from "../store/plannerStore";
 import { formatPayback, money, wholeNumber } from "../utils/format";
@@ -8,7 +8,6 @@ import { PlanSwitch } from "./PlanSwitch";
 type StatusFilter = "all" | "planned" | "diesel";
 type SortOrder = "distance" | "payback" | "transition";
 
-const PAGE_SIZE = 25;
 const bandLabels: Record<PaybackBand, string> = {
   fast: "Fast payback",
   moderate: "Moderate",
@@ -20,6 +19,7 @@ export function FleetPlanner() {
   const activePlanId = usePlannerStore((state) => state.activePlanId);
   const plan = usePlannerStore((state) => state.workspace.plans[activePlanId]);
   const assumptions = usePlannerStore((state) => state.workspace.assumptions);
+  const selectedVehicleId = usePlannerStore((state) => state.selectedVehicleId);
   const selectedVehicleIds = usePlannerStore((state) => state.selectedVehicleIds);
   const setSelectedVehicleIds = usePlannerStore((state) => state.setSelectedVehicleIds);
   const toggleVehicleSelected = usePlannerStore((state) => state.toggleVehicleSelected);
@@ -34,7 +34,6 @@ export function FleetPlanner() {
   const [category, setCategory] = useState("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sortOrder, setSortOrder] = useState<SortOrder>("distance");
-  const [page, setPage] = useState(1);
   const [bulkYear, setBulkYear] = useState(String(assumptions.startYear));
 
   const economics = useMemo(
@@ -69,13 +68,13 @@ export function FleetPlanner() {
       });
   }, [category, economics, plan.vehicles, search, sortOrder, status]);
 
-  useEffect(() => setPage(1), [search, category, status, sortOrder, activePlanId]);
-
-  const pageCount = Math.max(1, Math.ceil(filteredVehicles.length / PAGE_SIZE));
-  const visibleVehicles = filteredVehicles.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const depotVehicles = useMemo(
+    () => getDepotVehicleCohort(plan.vehicles, selectedVehicleId),
+    [plan.vehicles, selectedVehicleId],
+  );
   const selected = new Set(selectedVehicleIds);
-  const allFilteredSelected = filteredVehicles.length > 0 &&
-    filteredVehicles.every((vehicle) => selected.has(vehicle.id));
+  const allDepotVehiclesSelected = depotVehicles.length > 0 &&
+    depotVehicles.every((vehicle) => selected.has(vehicle.id));
   const years = Array.from(
     { length: assumptions.endYear - assumptions.startYear + 1 },
     (_, index) => assumptions.startYear + index,
@@ -88,13 +87,17 @@ export function FleetPlanner() {
     },
     { fast: 0, moderate: 0, long: 0, "not-viable": 0 },
   );
+  const bayNumbers = useMemo(
+    () => new Map(plan.vehicles.map((vehicle, index) => [vehicle.id, index + 1])),
+    [plan.vehicles],
+  );
 
-  function toggleFilteredSelection() {
-    const filteredIds = new Set(filteredVehicles.map((vehicle) => vehicle.id));
+  function toggleDepotSelection() {
+    const depotIds = new Set(depotVehicles.map((vehicle) => vehicle.id));
     setSelectedVehicleIds(
-      allFilteredSelected
-        ? selectedVehicleIds.filter((id) => !filteredIds.has(id))
-        : [...new Set([...selectedVehicleIds, ...filteredIds])],
+      allDepotVehiclesSelected
+        ? selectedVehicleIds.filter((id) => !depotIds.has(id))
+        : [...new Set([...selectedVehicleIds, ...depotIds])],
     );
   }
 
@@ -141,6 +144,15 @@ export function FleetPlanner() {
           <label className="field-label" htmlFor="sort-order"><span>Sort by</span><select id="sort-order" className="field-control" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as SortOrder)}><option value="distance">Highest distance</option><option value="payback">Shortest payback</option><option value="transition">Earliest transition</option></select></label>
         </div>
         <div className="category-actions" aria-label="Select a vehicle category">
+          <span className="fleet-match-count" role="status">{filteredVehicles.length} fleet {filteredVehicles.length === 1 ? "match" : "matches"}</span>
+          <button
+            className="secondary-button compact-button"
+            type="button"
+            disabled={filteredVehicles.length === 0}
+            onClick={() => setSelectedVehicleId(filteredVehicles[0]?.id ?? null)}
+          >
+            Show top match in depot
+          </button>
           {categories.map((item) => {
             const ids = plan.vehicles.filter((vehicle) => vehicle.category === item).map((vehicle) => vehicle.id);
             const isSelected = ids.every((id) => selected.has(id));
@@ -168,49 +180,55 @@ export function FleetPlanner() {
         </div>
       )}
 
-      <section className="panel-card fleet-table-card" aria-labelledby="fleet-results-title">
+      <section className="panel-card fleet-entity-card" aria-labelledby="fleet-results-title">
         <div className="fleet-results-heading">
           <div>
-            <h3 id="fleet-results-title">Fleet results</h3>
-            <p>
-              {filteredVehicles.length} {filteredVehicles.length === 1 ? "vehicle matches" : "vehicles match"} the current filters
-            </p>
+            <p className="eyebrow">Entity hierarchy</p>
+            <h3 id="fleet-results-title">Depot entities</h3>
+            <p>The same six vehicles currently rendered in the 3D depot</p>
           </div>
-          <label className="select-all-control"><input type="checkbox" checked={allFilteredSelected} onChange={toggleFilteredSelection} /> Select all filtered</label>
+          <div className="entity-heading-actions">
+            <span className="entity-viewport-count">Scene synchronized</span>
+            <label className="select-all-control"><input type="checkbox" checked={allDepotVehiclesSelected} onChange={toggleDepotSelection} /> Select all 6</label>
+          </div>
         </div>
-        <div className="table-scroll">
-          <table className="fleet-table">
-            <thead><tr><th className="checkbox-cell"><span className="sr-only">Select</span></th><th>Vehicle</th><th>Usage</th><th>Economics</th><th>Transition</th></tr></thead>
-            <tbody>
-              {visibleVehicles.map((vehicle) => (
-                <VehicleRow
-                  key={vehicle.id}
-                  vehicle={vehicle}
-                  selected={selected.has(vehicle.id)}
-                  economics={economics.get(vehicle.id)!}
-                  years={years}
-                  onToggle={() => toggleVehicleSelected(vehicle.id)}
-                  onInspect={() => setSelectedVehicleId(vehicle.id)}
-                  onTransition={(transitionYear) => setVehicleTransitionYear(vehicle.id, transitionYear)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {filteredVehicles.length === 0 && <div className="empty-state">No vehicles match these filters.</div>}
-        <div className="pagination" aria-label="Fleet pages">
-          <button type="button" className="secondary-button" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</button>
-          <span>Page {page} of {pageCount}</span>
-          <button type="button" className="secondary-button" disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Next</button>
+        <p id="entity-scroll-help" className="sr-only">This entity hierarchy contains the same six vehicles displayed in the 3D depot.</p>
+        <ul
+          className="fleet-entity-scroll"
+          aria-label="Depot entities"
+          aria-describedby="entity-scroll-help"
+          data-visible-rows="6"
+          tabIndex={0}
+        >
+          {depotVehicles.map((vehicle) => (
+            <VehicleEntityRow
+              key={vehicle.id}
+              vehicle={vehicle}
+              bayNumber={bayNumbers.get(vehicle.id) ?? 0}
+              selected={selected.has(vehicle.id)}
+              inspected={selectedVehicleId === vehicle.id}
+              economics={economics.get(vehicle.id)!}
+              years={years}
+              onToggle={() => toggleVehicleSelected(vehicle.id)}
+              onInspect={() => setSelectedVehicleId(vehicle.id)}
+              onTransition={(transitionYear) => setVehicleTransitionYear(vehicle.id, transitionYear)}
+            />
+          ))}
+        </ul>
+        <div className="entity-inspector-footer" aria-hidden="true">
+          <span>Current depot cohort</span>
+          <span>{depotVehicles.length} entities</span>
         </div>
       </section>
     </div>
   );
 }
 
-function VehicleRow({ vehicle, selected, economics, years, onToggle, onInspect, onTransition }: {
+function VehicleEntityRow({ vehicle, bayNumber, selected, inspected, economics, years, onToggle, onInspect, onTransition }: {
   vehicle: Vehicle;
+  bayNumber: number;
   selected: boolean;
+  inspected: boolean;
   economics: ReturnType<typeof calculateVehicleEconomics>;
   years: number[];
   onToggle: () => void;
@@ -218,15 +236,25 @@ function VehicleRow({ vehicle, selected, economics, years, onToggle, onInspect, 
   onTransition: (year: number | null) => void;
 }) {
   return (
-    <tr className={selected ? "is-selected" : ""}>
-      <td className="checkbox-cell"><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select ${vehicle.registration}`} /></td>
-      <td><button className="vehicle-link" type="button" onClick={onInspect}>{vehicle.registration}</button><span>{vehicle.category}</span></td>
-      <td>
-        <strong>{wholeNumber.format(vehicle.annualDistanceKm)} km</strong>
-        <span>{vehicle.currentAgeYears} {vehicle.currentAgeYears === 1 ? "year" : "years"} old</span>
-      </td>
-      <td><strong className={economics.annualSavings >= 0 ? "positive-text" : "danger-text"}>{money.format(economics.annualSavings)}/yr</strong><span className={`roi-label roi-${economics.paybackBand}`}>{formatPayback(economics.paybackYears)}</span></td>
-      <td><select className="field-control row-select" aria-label={`${vehicle.registration} transition year`} value={vehicle.transitionYear ?? ""} onChange={(event) => onTransition(event.target.value === "" ? null : Number(event.target.value))}><option value="">Retain diesel</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></td>
-    </tr>
+    <li className={`fleet-entity-row${selected ? " is-selected" : ""}${inspected ? " is-inspected" : ""}`}>
+      <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select ${vehicle.registration}`} />
+      <button className="entity-identity" type="button" onClick={onInspect} aria-label={vehicle.registration} aria-current={inspected ? "true" : undefined}>
+        <div className="entity-title-line">
+          <strong className="entity-registration">{vehicle.registration}</strong>
+          <span className={vehicle.transitionYear === null ? "entity-status is-diesel" : "entity-status is-planned"}>{vehicle.transitionYear === null ? "Diesel" : `EV ${vehicle.transitionYear}`}</span>
+        </div>
+        <span>{vehicle.category} · Bay {String(bayNumber).padStart(2, "0")}</span>
+        <div className="entity-metrics">
+          <span>{wholeNumber.format(vehicle.annualDistanceKm)} km</span>
+          <span>{vehicle.currentAgeYears} {vehicle.currentAgeYears === 1 ? "yr" : "yrs"}</span>
+          <span className={economics.annualSavings >= 0 ? "positive-text" : "danger-text"}>{money.format(economics.annualSavings)}/yr</span>
+          <span className={`roi-label roi-${economics.paybackBand}`}>{formatPayback(economics.paybackYears)}</span>
+        </div>
+      </button>
+      <label className="entity-transition-control">
+        <span>Transition</span>
+        <select className="field-control row-select" aria-label={`${vehicle.registration} transition year`} value={vehicle.transitionYear ?? ""} onChange={(event) => onTransition(event.target.value === "" ? null : Number(event.target.value))}><option value="">Retain diesel</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select>
+      </label>
+    </li>
   );
 }
