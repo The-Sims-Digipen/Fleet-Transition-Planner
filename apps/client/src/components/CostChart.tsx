@@ -2,10 +2,10 @@ import ReactECharts from "echarts-for-react";
 import type { PaybackProjectionPoint, TransitionPlanResult } from "../domain/fleet";
 import { compactMoney, money } from "../utils/format";
 
-type CashSeriesPoint = {
+type TotalCostSeriesPoint = {
   value: [number, number];
   year: number;
-  phase: "after-capital" | "year-end";
+  phase: "start" | "after-capital" | "year-end";
   baselineFuelThisYear: number;
   planDieselThisYear: number;
   planElectricityThisYear: number;
@@ -29,10 +29,13 @@ function positionLabel(value: number): string {
     : `${money.format(Math.abs(value))} left to recover`;
 }
 
-function toCashSeries(points: PaybackProjectionPoint[]): CashSeriesPoint[] {
+function toPlanCostSeries(points: PaybackProjectionPoint[]): TotalCostSeriesPoint[] {
   return points.flatMap((point, index) => {
-    const afterCapital: CashSeriesPoint = {
-      value: [point.elapsedYears - 1, Math.round(point.netPositionBeforeOperations)],
+    const afterCapital: TotalCostSeriesPoint = {
+      value: [
+        point.elapsedYears - 1,
+        Math.round(point.cumulativePlanCost - point.annualPlanOperatingCost),
+      ],
       year: point.year,
       phase: "after-capital",
       baselineFuelThisYear: point.annualBaselineFuelCost,
@@ -44,8 +47,8 @@ function toCashSeries(points: PaybackProjectionPoint[]): CashSeriesPoint[] {
       cumulativePlanCost:
         point.cumulativePlanCost - point.annualPlanOperatingCost,
     };
-    const yearEnd: CashSeriesPoint = {
-      value: [point.elapsedYears, Math.round(point.netPosition)],
+    const yearEnd: TotalCostSeriesPoint = {
+      value: [point.elapsedYears, Math.round(point.cumulativePlanCost)],
       year: point.year,
       phase: "year-end",
       baselineFuelThisYear: point.annualBaselineFuelCost,
@@ -62,6 +65,39 @@ function toCashSeries(points: PaybackProjectionPoint[]): CashSeriesPoint[] {
   });
 }
 
+function toBaselineCostSeries(points: PaybackProjectionPoint[]): TotalCostSeriesPoint[] {
+  const firstPoint = points[0];
+  if (!firstPoint) return [];
+
+  const start: TotalCostSeriesPoint = {
+    value: [0, 0],
+    year: firstPoint.year,
+    phase: "start",
+    baselineFuelThisYear: firstPoint.annualBaselineFuelCost,
+    planDieselThisYear: firstPoint.annualPlanDieselCost,
+    planElectricityThisYear: firstPoint.annualPlanElectricCost,
+    capitalThisYear: firstPoint.annualCapitalCost,
+    cumulativeBaselineCost: 0,
+    cumulativePlanCost:
+      firstPoint.cumulativePlanCost - firstPoint.annualPlanOperatingCost,
+  };
+
+  return [
+    start,
+    ...points.map<TotalCostSeriesPoint>((point) => ({
+      value: [point.elapsedYears, Math.round(point.cumulativeBaselineCost)],
+      year: point.year,
+      phase: "year-end",
+      baselineFuelThisYear: point.annualBaselineFuelCost,
+      planDieselThisYear: point.annualPlanDieselCost,
+      planElectricityThisYear: point.annualPlanElectricCost,
+      capitalThisYear: point.annualCapitalCost,
+      cumulativeBaselineCost: point.cumulativeBaselineCost,
+      cumulativePlanCost: point.cumulativePlanCost,
+    })),
+  ];
+}
+
 export function CostChart({ result, selectedYear }: {
   result: TransitionPlanResult;
   selectedYear: number;
@@ -71,7 +107,8 @@ export function CostChart({ result, selectedYear }: {
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const projection = result.payback;
   const finalPoint = projection.points.at(-1);
-  const cashSeries = toCashSeries(projection.points);
+  const baselineCostSeries = toBaselineCostSeries(projection.points);
+  const planCostSeries = toPlanCostSeries(projection.points);
   const hasTransitionInvestment = projection.firstTransitionYear !== null;
   const paybackCalendarYear = projection.paybackCalendarYear === null
     ? null
@@ -102,32 +139,20 @@ export function CostChart({ result, selectedYear }: {
           detail: `${money.format(Math.max(0, -(finalPoint?.netPosition ?? 0)))} remains unrecovered by ${finalPoint?.year}.`,
         };
 
-  const positions = cashSeries.map((point) => point.value[1]);
-  const rawMin = Math.min(0, ...positions);
-  const rawMax = Math.max(0, ...positions);
-  const spread = Math.max(1_000, rawMax - rawMin);
-  const axisMin = Math.floor(rawMin - spread * 0.12);
-  const axisMax = Math.ceil(rawMax + spread * 0.12);
+  const costs = [...baselineCostSeries, ...planCostSeries].map(
+    (point) => point.value[1],
+  );
+  const rawMax = Math.max(1_000, ...costs);
+  const axisMax = Math.ceil(rawMax * 1.08);
   const xMax = (finalPoint?.elapsedYears ?? 1) +
     (projection.paybackYears === null ? 0 : 1);
   const xInterval = xMax <= 10 ? 1 : 2;
+  const paybackCost = projection.paybackYears === null
+    ? null
+    : (projection.points[0]?.annualBaselineFuelCost ?? 0) *
+      projection.paybackYears;
 
-  const markLines: Array<Record<string, unknown>> = [
-    {
-      name: "Payback threshold",
-      yAxis: 0,
-      lineStyle: { color: "rgba(226, 232, 240, 0.72)", type: "dashed", width: 2 },
-      label: {
-        show: true,
-        position: "insideStartTop",
-        formatter: "Investment fully recovered · $0",
-        color: "#e2e8f0",
-        backgroundColor: "rgba(12, 20, 36, 0.9)",
-        borderRadius: 4,
-        padding: [3, 6],
-      },
-    },
-  ];
+  const markLines: Array<Record<string, unknown>> = [];
 
   if (showSelectedYear) {
     markLines.push({
@@ -163,12 +188,18 @@ export function CostChart({ result, selectedYear }: {
       backgroundColor: "#0f172a",
       borderColor: "rgba(56, 189, 248, 0.35)",
       textStyle: { color: "#f8fafc" },
-      formatter: (params: { data?: CashSeriesPoint }) => {
+      formatter: (params: { data?: TotalCostSeriesPoint }) => {
         const point = params.data;
         if (!point) return "";
-        const isYearEnd = point.phase === "year-end";
+        const phaseLabel = point.phase === "year-end"
+          ? "End of year"
+          : point.phase === "after-capital"
+            ? "After scheduled purchases"
+            : "Start of projection";
+        const totalCostDifference =
+          point.cumulativeBaselineCost - point.cumulativePlanCost;
         return [
-          `<strong>${point.year} · ${isYearEnd ? "End of year" : "After scheduled purchases"}</strong>`,
+          `<strong>${point.year} · ${phaseLabel}</strong>`,
           `Years since first transition: ${durationFormat.format(point.value[0])}`,
           `Before · all-diesel fuel this year: ${money.format(point.baselineFuelThisYear)}`,
           `After · remaining diesel this year: ${money.format(point.planDieselThisYear)}`,
@@ -176,12 +207,12 @@ export function CostChart({ result, selectedYear }: {
           `After · EV and charger purchases: ${money.format(point.capitalThisYear)}`,
           `Before · cumulative all-diesel cost: ${money.format(point.cumulativeBaselineCost)}`,
           `After · cumulative plan cost: ${money.format(point.cumulativePlanCost)}`,
-          `Total-cost difference: ${positionLabel(point.value[1])}`,
+          `Total-cost difference: ${positionLabel(totalCostDifference)}`,
         ].join("<br/>");
       },
     },
     legend: {
-      data: ["Before cost − after cost"],
+      data: ["All-diesel fleet", "Active transition plan"],
       top: 0,
       left: "center",
       textStyle: { color: "#cbd5e1" },
@@ -202,7 +233,7 @@ export function CostChart({ result, selectedYear }: {
     },
     yAxis: {
       type: "value",
-      min: axisMin,
+      min: 0,
       max: axisMax,
       splitNumber: 5,
       splitLine: { lineStyle: { color: "rgba(71,85,105,0.35)" } },
@@ -213,7 +244,19 @@ export function CostChart({ result, selectedYear }: {
     },
     series: [
       {
-        name: "Before cost − after cost",
+        name: "All-diesel fleet",
+        type: "line",
+        z: 2,
+        showSymbol: true,
+        symbol: "diamond",
+        symbolSize: 7,
+        smooth: false,
+        lineStyle: { width: 2.5, color: "#f59e0b", type: "dashed" },
+        itemStyle: { color: "#f59e0b", borderColor: "#0c1424", borderWidth: 1.5 },
+        data: baselineCostSeries,
+      },
+      {
+        name: "Active transition plan",
         type: "line",
         z: 3,
         showSymbol: true,
@@ -222,22 +265,7 @@ export function CostChart({ result, selectedYear }: {
         smooth: false,
         lineStyle: { width: 3, color: "#38bdf8" },
         itemStyle: { color: "#38bdf8", borderColor: "#0c1424", borderWidth: 1.5 },
-        areaStyle: { color: "rgba(56, 189, 248, 0.08)" },
-        data: cashSeries,
-        markArea: {
-          silent: true,
-          label: { show: false },
-          data: [
-            [
-              { yAxis: axisMin, itemStyle: { color: "rgba(248, 113, 113, 0.08)" } },
-              { yAxis: 0 },
-            ],
-            [
-              { yAxis: 0, itemStyle: { color: "rgba(52, 211, 153, 0.07)" } },
-              { yAxis: axisMax },
-            ],
-          ],
-        },
+        data: planCostSeries,
         markLine: {
           silent: true,
           symbol: ["none", "none"],
@@ -258,7 +286,7 @@ export function CostChart({ result, selectedYear }: {
           },
           data: projection.paybackYears === null
             ? []
-            : [{ coord: [projection.paybackYears, 0] }],
+            : [{ coord: [projection.paybackYears, paybackCost] }],
         },
       },
     ],
@@ -277,15 +305,15 @@ export function CostChart({ result, selectedYear }: {
         <span>{outcome.detail}</span>
       </div>
       <p className="sr-only">
-        This chart subtracts the active plan&apos;s cumulative total cost from the cumulative cost of retaining an all-diesel fleet. The active plan includes EV and charger purchases, diesel for vehicles not yet transitioned, and electricity for EVs. Values below zero are unrecovered cost; crossing zero is full-plan payback; values above zero are net savings. {outcome.title}. {outcome.detail}
+        This chart compares two rising cumulative total costs. The all-diesel line includes fuel for the whole fleet. The active-plan line includes EV and charger purchases, diesel for vehicles not yet transitioned, and electricity for EVs. Their intersection is full-plan payback. {outcome.title}. {outcome.detail}
       </p>
       {hasTransitionInvestment ? (
         <>
-          <div className="payback-zone-key" aria-label="Chart position guide">
-            <span><i className="zone-unrecovered" aria-hidden="true" />Below $0 · investment not yet recovered</span>
-            <span><i className="zone-savings" aria-hidden="true" />Above $0 · net savings</span>
+          <div className="payback-cost-key" aria-label="Cost lines explained">
+            <span><i className="cost-baseline" aria-hidden="true" />All-diesel fleet · fuel for every vehicle</span>
+            <span><i className="cost-plan" aria-hidden="true" />Active plan · purchases, remaining diesel, and electricity</span>
           </div>
-          <p className="chart-unit-label">Cumulative total-cost difference (SGD)</p>
+          <p className="chart-unit-label">Cumulative total cost (SGD)</p>
           <ReactECharts option={option} style={{ width: "100%", height: "20rem" }} />
           <details className="data-table-disclosure payback-data-table">
             <summary>View payback data</summary>
